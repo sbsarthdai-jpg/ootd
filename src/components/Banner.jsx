@@ -1,332 +1,143 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
-import IconButton from '@mui/material/IconButton';
 import CircularProgress from '@mui/material/CircularProgress';
 import { supabase } from '../lib/supabase.js';
 
 const BASE = import.meta.env.BASE_URL;
 
-const BANNER_IMAGES = [
-  `${BASE}images/베너1.avif`,
-  `${BASE}images/베너2.jpg`,
-  `${BASE}images/베너3.jpg`,
-  `${BASE}images/베너4.jpg`,
-  `${BASE}images/베너5.jpg`,
-  `${BASE}images/베너6.jpg`,
-  `${BASE}images/베너7.jpg`,
-  `${BASE}images/베너8.jpg`,
-  `${BASE}images/베너9.jpg`,
-  `${BASE}images/베너10.jpg`,
-  `${BASE}images/베너11.jpg`,
-  `${BASE}images/베너12.jpg`,
-];
-
-const ArrowLeft = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6z" />
-  </svg>
+const BANNER_IMAGES = Array.from({ length: 12 }, (_, i) =>
+  `${BASE}images/${i === 0 ? '베너1.avif' : `베너${i + 1}.jpg`}`
 );
 
-const ArrowRight = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z" />
-  </svg>
-);
+const Prev = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6z"/></svg>;
+const Next = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6z"/></svg>;
+const Plus = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>;
+const Check = () => <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>;
 
-const UploadIcon = () => (
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z" />
-    <path d="M13 7h-2v2H9v2h2v2h2v-2h2V9h-2z" />
-  </svg>
-);
-
-const CheckIcon = () => (
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-  </svg>
-);
-
-export default function Banner() {
-  const [current, setCurrent] = useState(0);
-  const [uploading, setUploading] = useState(false);
-  const [uploadDone, setUploadDone] = useState(false);
+export default function Banner({ uploadedImages = [] }) {
   const [slides, setSlides] = useState(BANNER_IMAGES);
-  const dragStartX = useRef(0);
-  const dragging = useRef(false);
+  const [cur, setCur] = useState(0);
+  const [uploading, setUploading] = useState(false);
+  const [done, setDone] = useState(false);
+  const timer = useRef(null);
   const fileRef = useRef(null);
-  const timerRef = useRef(null);
+  const dragX = useRef(0);
 
-  const startTimer = useCallback((len) => {
-    clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setCurrent((c) => (c + 1) % (len || slides.length));
-    }, 4000);
+  const reset = useCallback((len) => {
+    clearInterval(timer.current);
+    timer.current = setInterval(() => setCur(c => (c + 1) % (len ?? slides.length)), 4500);
   }, [slides.length]);
 
-  useEffect(() => {
-    startTimer();
-    return () => clearInterval(timerRef.current);
-  }, [startTimer]);
+  useEffect(() => { reset(); return () => clearInterval(timer.current); }, [reset]);
 
   useEffect(() => {
-    (async () => {
-      const { data } = await supabase.from('ootd_uploads').select('image_url');
-      if (data && data.length > 0) {
-        const urls = data.map((r) => r.image_url).filter(Boolean);
-        setSlides([...BANNER_IMAGES, ...urls]);
-      }
-    })();
-  }, []);
+    if (uploadedImages.length) {
+      setSlides([...BANNER_IMAGES, ...uploadedImages]);
+    }
+  }, [uploadedImages]);
 
-  const go = (dir) => {
-    setCurrent((c) => (c + dir + slides.length) % slides.length);
-    startTimer();
-  };
-
-  const handlePointerDown = (e) => {
-    dragStartX.current = e.touches ? e.touches[0].clientX : e.clientX;
-    dragging.current = true;
-  };
-
-  const handlePointerUp = (e) => {
-    if (!dragging.current) return;
-    const endX = e.touches ? e.changedTouches[0].clientX : e.clientX;
-    const diff = dragStartX.current - endX;
-    if (Math.abs(diff) > 50) go(diff > 0 ? 1 : -1);
-    dragging.current = false;
-  };
+  const go = (d) => { setCur(c => (c + d + slides.length) % slides.length); reset(); };
 
   const handleUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
     try {
-      const ext = file.name.split('.').pop();
-      const path = `banner/${Date.now()}.${ext}`;
+      const path = `banner/${Date.now()}.${file.name.split('.').pop()}`;
       const { error } = await supabase.storage.from('ootd-images').upload(path, file);
       if (error) throw error;
-      const { data: urlData } = supabase.storage.from('ootd-images').getPublicUrl(path);
-      const publicUrl = urlData.publicUrl;
-      await supabase.from('ootd_uploads').insert({ image_url: publicUrl });
-      const next = [...slides, publicUrl];
-      setSlides(next);
-      setCurrent(next.length - 1);
-      setUploadDone(true);
-      setTimeout(() => setUploadDone(false), 2500);
-    } catch (err) {
-      console.error('업로드 실패:', err);
-    } finally {
-      setUploading(false);
-      e.target.value = '';
-    }
+      const { data } = supabase.storage.from('ootd-images').getPublicUrl(path);
+      await supabase.from('ootd_uploads').insert({ image_url: data.publicUrl });
+      const next = [...slides, data.publicUrl];
+      setSlides(next); setCur(next.length - 1); reset(next.length);
+      setDone(true); setTimeout(() => setDone(false), 2500);
+    } catch (err) { console.error(err); }
+    finally { setUploading(false); e.target.value = ''; }
   };
 
   return (
-    <Box
-      component="section"
-      sx={{
-        position: 'relative',
-        width: '100%',
-        height: '100svh',
-        overflow: 'hidden',
-        bgcolor: '#0D0D0D',
-        userSelect: 'none',
-      }}
-      onMouseDown={handlePointerDown}
-      onMouseUp={handlePointerUp}
-      onTouchStart={handlePointerDown}
-      onTouchEnd={handlePointerUp}
+    <Box component="section" sx={{
+      position: 'relative', width: '100%', height: '100svh',
+      overflow: 'hidden', bgcolor: '#0A0A0A', userSelect: 'none',
+    }}
+      onMouseDown={e => { dragX.current = e.clientX; }}
+      onMouseUp={e => { const d = dragX.current - e.clientX; if (Math.abs(d) > 50) go(d > 0 ? 1 : -1); }}
+      onTouchStart={e => { dragX.current = e.touches[0].clientX; }}
+      onTouchEnd={e => { const d = dragX.current - e.changedTouches[0].clientX; if (Math.abs(d) > 50) go(d > 0 ? 1 : -1); }}
     >
+      {/* Slides */}
       {slides.map((src, i) => (
-        <Box
-          key={src}
-          component="img"
-          src={src}
-          alt={`banner ${i + 1}`}
-          sx={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'cover',
-            opacity: i === current ? 1 : 0,
-            transition: 'opacity 1s ease',
-            pointerEvents: 'none',
-          }}
-        />
+        <Box key={src} component="img" src={src} alt="" sx={{
+          position: 'absolute', inset: 0, width: '100%', height: '100%',
+          objectFit: 'cover', pointerEvents: 'none',
+          opacity: i === cur ? 1 : 0, transition: 'opacity 1.2s ease',
+        }} />
       ))}
 
-      <Box
-        sx={{
-          position: 'absolute',
-          inset: 0,
-          background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.5) 100%)',
-        }}
-      />
+      {/* Gradient overlay */}
+      <Box sx={{
+        position: 'absolute', inset: 0,
+        background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, rgba(0,0,0,0.55) 100%)',
+      }} />
 
-      {/* 상단 레이블 */}
-      <Box sx={{ position: 'absolute', top: 28, left: 32 }}>
-        <Typography
-          sx={{
-            color: 'rgba(255,255,255,0.7)',
-            fontSize: '0.65rem',
-            letterSpacing: '0.25em',
-            textTransform: 'uppercase',
-            fontFamily: '"Inter", sans-serif',
-          }}
-        >
+      {/* Top bar */}
+      <Box sx={{ position: 'absolute', top: 28, left: 36, right: 36, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Box sx={{ fontFamily: '"Montserrat",sans-serif', fontWeight: 500, fontSize: '0.6rem', letterSpacing: '0.22em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.65)' }}>
           My Wardrobe
-        </Typography>
-      </Box>
-
-      <Box sx={{ position: 'absolute', top: 28, right: 32 }}>
-        <Typography
-          sx={{
-            color: 'rgba(255,255,255,0.5)',
-            fontSize: '0.65rem',
-            letterSpacing: '0.1em',
-            fontFamily: '"Inter", sans-serif',
-          }}
-        >
-          {String(current + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}
-        </Typography>
-      </Box>
-
-      {/* 하단 텍스트 */}
-      <Box sx={{ position: 'absolute', bottom: 80, left: 32, right: 32 }}>
-        <Typography
-          sx={{
-            fontFamily: '"Cormorant Garamond", serif',
-            fontSize: { xs: '2.8rem', md: '5rem' },
-            fontWeight: 300,
-            color: '#FAFAF8',
-            lineHeight: 1.05,
-            letterSpacing: '-0.02em',
-            maxWidth: 680,
-          }}
-        >
-          나만의 스타일,
-          <br />
-          오늘의 코디.
-        </Typography>
-      </Box>
-
-      {/* 업로드 버튼 (중앙) */}
-      <Box
-        sx={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 1,
-        }}
-      >
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          style={{ display: 'none' }}
-          onChange={handleUpload}
-        />
-        <Box
-          onClick={() => !uploading && fileRef.current?.click()}
-          sx={{
-            width: 72,
-            height: 72,
-            borderRadius: '50%',
-            border: '1.5px solid rgba(255,255,255,0.6)',
-            backdropFilter: 'blur(8px)',
-            bgcolor: 'rgba(255,255,255,0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            color: '#fff',
-            transition: 'all 0.3s ease',
-            '&:hover': {
-              bgcolor: 'rgba(255,255,255,0.22)',
-              transform: 'scale(1.08)',
-            },
-          }}
-        >
-          {uploading ? (
-            <CircularProgress size={24} sx={{ color: '#fff' }} />
-          ) : uploadDone ? (
-            <CheckIcon />
-          ) : (
-            <UploadIcon />
-          )}
         </Box>
-        <Typography
-          sx={{
-            color: 'rgba(255,255,255,0.6)',
-            fontSize: '0.6rem',
-            letterSpacing: '0.18em',
-            textTransform: 'uppercase',
-            fontFamily: '"Inter", sans-serif',
-          }}
-        >
-          {uploadDone ? '업로드 완료' : '이미지 추가'}
-        </Typography>
+        <Box sx={{ fontFamily: '"Montserrat",sans-serif', fontWeight: 500, fontSize: '0.6rem', letterSpacing: '0.12em', color: 'rgba(255,255,255,0.5)' }}>
+          {String(cur + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}
+        </Box>
       </Box>
 
-      {/* 화살표 */}
-      <IconButton
-        onClick={(e) => { e.stopPropagation(); go(-1); }}
-        sx={{
-          position: 'absolute',
-          left: 12,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          color: 'rgba(255,255,255,0.75)',
-          '&:hover': { color: '#fff', bgcolor: 'rgba(255,255,255,0.12)' },
-        }}
-      >
-        <ArrowLeft />
-      </IconButton>
+      {/* Bottom headline */}
+      <Box sx={{ position: 'absolute', bottom: 88, left: 36 }}>
+        <Box sx={{ fontFamily: '"Montserrat",sans-serif', fontWeight: 800, fontSize: { xs: '2.5rem', md: '4.5rem' }, letterSpacing: '-0.04em', lineHeight: 0.95, color: '#fff', maxWidth: 680 }}>
+          On-trend looks.<br />
+          <Box component="span" sx={{ fontStyle: 'italic', fontWeight: 300 }}>Made by you.</Box>
+        </Box>
+      </Box>
 
-      <IconButton
-        onClick={(e) => { e.stopPropagation(); go(1); }}
-        sx={{
-          position: 'absolute',
-          right: 12,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          color: 'rgba(255,255,255,0.75)',
-          '&:hover': { color: '#fff', bgcolor: 'rgba(255,255,255,0.12)' },
-        }}
-      >
-        <ArrowRight />
-      </IconButton>
+      {/* Upload button — center */}
+      <Box sx={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1 }}>
+        <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleUpload} />
+        <Box onClick={() => !uploading && fileRef.current?.click()} sx={{
+          width: 68, height: 68, borderRadius: '50%',
+          border: '1.5px solid rgba(255,255,255,0.7)',
+          bgcolor: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: '#fff', cursor: 'pointer',
+          transition: 'all 0.25s', '&:hover': { bgcolor: '#FF5D26', borderColor: '#FF5D26', transform: 'scale(1.1)' },
+        }}>
+          {uploading ? <CircularProgress size={22} sx={{ color: '#fff' }} /> : done ? <Check /> : <Plus />}
+        </Box>
+        <Box sx={{ fontFamily: '"Montserrat",sans-serif', fontWeight: 600, fontSize: '0.55rem', letterSpacing: '0.2em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.55)' }}>
+          {done ? 'Uploaded' : 'Add Photo'}
+        </Box>
+      </Box>
 
-      {/* 도트 인디케이터 */}
-      <Box
-        sx={{
-          position: 'absolute',
-          bottom: 28,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          gap: '6px',
-        }}
-      >
+      {/* Arrows */}
+      {[[-1, 'left', 20], [1, 'right', 20]].map(([dir, side, pos]) => (
+        <Box key={side} onClick={e => { e.stopPropagation(); go(dir); }}
+          sx={{
+            position: 'absolute', [side]: pos, top: '50%', transform: 'translateY(-50%)',
+            color: 'rgba(255,255,255,0.7)', cursor: 'pointer', p: 1,
+            '&:hover': { color: '#fff' }, transition: 'color 0.2s',
+          }}>
+          {dir === -1 ? <Prev /> : <Next />}
+        </Box>
+      ))}
+
+      {/* Dots */}
+      <Box sx={{ position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '6px' }}>
         {slides.map((_, i) => (
-          <Box
-            key={i}
-            onClick={(e) => { e.stopPropagation(); setCurrent(i); startTimer(); }}
+          <Box key={i} onClick={() => { setCur(i); reset(); }}
             sx={{
-              width: i === current ? 20 : 5,
-              height: 5,
-              borderRadius: '3px',
-              bgcolor: i === current ? '#fff' : 'rgba(255,255,255,0.38)',
-              transition: 'all 0.4s ease',
-              cursor: 'pointer',
-            }}
-          />
+              height: 4, borderRadius: 2, cursor: 'pointer',
+              width: i === cur ? 22 : 4,
+              bgcolor: i === cur ? '#fff' : 'rgba(255,255,255,0.35)',
+              transition: 'all 0.35s ease',
+            }} />
         ))}
       </Box>
     </Box>
